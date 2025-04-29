@@ -7,7 +7,15 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "session": "node generateSession.js",
+    "import": "node importMonitoredChannels.js",
+    "test-channel": "node testChannel.js",
+    "test-system": "node testSystem.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mister-nothing00/bot-telegram.git"
   },
   "keywords": [],
   "author": "",
