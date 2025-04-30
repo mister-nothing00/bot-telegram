@@ -1,15 +1,14 @@
 /**
- * MediaProcessor - Gestisce l'elaborazione e la pubblicazione dei messaggi
- * 
- * Questo servizio è responsabile di:
- * 1. Processare i messaggi dai canali monitorati
- * 2. Estrarre e pulire il testo/media
- * 3. Pubblicare il contenuto nel canale di destinazione
- * 4. Gestire gruppi di media
+ * MediaProcessor - Versione con approccio API nativa
  */
 const logger = require('../utils/logger');
 const contentCleaner = require('./contentCleaner');
 const config = require('../config');
+const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
 
 class MediaProcessor {
   constructor(telegramService) {
@@ -17,13 +16,17 @@ class MediaProcessor {
     this.retryAttempts = 3;
     this.retryDelay = 1000;
     this.destinationChannelId = config.telegram.destinationChannelId;
+    this.botToken = config.telegram.botToken;
+    
+    // Crea directory temp se non esiste
+    this.tempDir = path.join(process.cwd(), 'temp');
+    if (!fs.existsSync(this.tempDir)) {
+      fs.mkdirSync(this.tempDir, { recursive: true });
+    }
   }
 
   /**
    * Processa un messaggio dal canale monitorato
-   * @param {Object} message - Messaggio Telegram originale
-   * @param {Object} channelConfig - Configurazione del canale
-   * @returns {Object} Contenuto processato
    */
   async processMessage(message, channelConfig) {
     try {
@@ -65,65 +68,46 @@ class MediaProcessor {
   }
 
   /**
-   * Pubblica il contenuto nel canale di destinazione
-   * @param {Object} processedContent - Contenuto processato
-   * @param {Object} channelConfig - Configurazione del canale
-   * @param {Object} originalMessage - Messaggio originale
-   * @returns {Boolean} Successo della pubblicazione
+   * Pubblica il contenuto nel canale di destinazione utilizzando direttamente l'API HTTP di Telegram
    */
   async publishToDestination(processedContent, channelConfig, originalMessage) {
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
-        const bot = this.telegramService.getBot();
         const userClient = this.telegramService.getUserClient();
         
-        // Prepara la descrizione
-        let caption = this.prepareCaption(processedContent);
+        // Prepara il testo
+        const caption = this.prepareCaption(processedContent);
         
-        // SOLUZIONE COMPLETA:
-        // Invece di inoltrare il media, lo scarichiamo e lo inviamo direttamente
-        // con il bot nel topic corretto insieme alla descrizione
-        if (originalMessage.media) {
-          logger.info(`Invio media nel topic Articoli (${channelConfig.destinationTopic})`);
-          
-          // 1. Scarica il media
-          const mediaBuffer = await userClient.downloadMedia(originalMessage.media);
-          if (!mediaBuffer) {
-            throw new Error('Download del media fallito');
-          }
-          
-          // 2. Invia il media con la caption direttamente nel topic corretto
-          let sentMessage;
-          
-          if (originalMessage.media.className === 'MessageMediaPhoto') {
-            sentMessage = await bot.api.sendPhoto(this.destinationChannelId, mediaBuffer, {
-              message_thread_id: channelConfig.destinationTopic,
-              caption: caption
-            });
-          } else if (originalMessage.media.className === 'MessageMediaDocument') {
-            sentMessage = await bot.api.sendDocument(this.destinationChannelId, mediaBuffer, {
-              message_thread_id: channelConfig.destinationTopic,
-              caption: caption
-            });
-          } else if (originalMessage.media.className === 'MessageMediaVideo') {
-            sentMessage = await bot.api.sendVideo(this.destinationChannelId, mediaBuffer, {
-              message_thread_id: channelConfig.destinationTopic,
-              caption: caption
-            });
-          }
-          
-          if (sentMessage) {
-            logger.info(`Media inviato con successo nel topic Articoli con ID: ${sentMessage.message_id}`);
-            return true;
-          }
-        } else {
-          // Messaggio solo testo
-          await bot.api.sendMessage(this.destinationChannelId, caption, {
-            message_thread_id: channelConfig.destinationTopic
-          });
-          logger.info(`Messaggio di solo testo inviato nel topic Articoli`);
+        // Se non c'è media, invia solo testo
+        if (!originalMessage.media) {
+          await this.sendTextMessage(caption, channelConfig.destinationTopic);
+          logger.info(`Messaggio di solo testo inviato nel topic ${channelConfig.destinationTopic}`);
           return true;
         }
+        
+        // Altrimenti, gestisci il media
+        const mediaBuffer = await userClient.downloadMedia(originalMessage.media);
+        if (!mediaBuffer || mediaBuffer.length === 0) {
+          throw new Error('Download del media fallito');
+        }
+        
+        // Salva in file temporaneo con estensione corretta
+        const filePath = await this.saveTempMediaFile(mediaBuffer, originalMessage.media.className);
+        
+        // Invia usando API HTTP diretta
+        if (originalMessage.media.className === 'MessageMediaPhoto') {
+          await this.sendPhoto(filePath, caption, channelConfig.destinationTopic);
+        } else if (originalMessage.media.className === 'MessageMediaDocument') {
+          await this.sendDocument(filePath, caption, channelConfig.destinationTopic);
+        } else if (originalMessage.media.className === 'MessageMediaVideo') {
+          await this.sendVideo(filePath, caption, channelConfig.destinationTopic);
+        }
+        
+        // Pulisci il file
+        await this.cleanupTempFile(filePath);
+        
+        logger.info(`Media inviato con successo nel topic ${channelConfig.destinationTopic}`);
+        return true;
       } catch (error) {
         logger.warn(`Tentativo ${attempt}/${this.retryAttempts} fallito: ${error.message}`);
         
@@ -138,9 +122,41 @@ class MediaProcessor {
   }
 
   /**
+   * Salva il buffer in un file temporaneo
+   */
+  async saveTempMediaFile(buffer, mediaType) {
+    const randomFileName = crypto.randomBytes(16).toString('hex');
+    let extension = '.bin';
+    
+    // Assegna estensione in base al tipo di media
+    if (mediaType === 'MessageMediaPhoto') {
+      extension = '.jpg';
+    } else if (mediaType === 'MessageMediaVideo') {
+      extension = '.mp4';
+    } else if (mediaType === 'MessageMediaDocument') {
+      extension = '.doc';
+    }
+    
+    const filePath = path.join(this.tempDir, `${randomFileName}${extension}`);
+    await fs.promises.writeFile(filePath, buffer);
+    logger.debug(`File salvato con successo: ${filePath}`);
+    return filePath;
+  }
+  
+  /**
+   * Elimina un file temporaneo
+   */
+  async cleanupTempFile(filePath) {
+    try {
+      await fs.promises.unlink(filePath);
+      logger.debug(`File temporaneo rimosso: ${filePath}`);
+    } catch (err) {
+      logger.warn(`Errore pulizia file temporaneo: ${err.message}`);
+    }
+  }
+
+  /**
    * Prepara la descrizione formattata del messaggio
-   * @param {Object} processedContent - Contenuto processato
-   * @returns {String} Testo formattato
    */
   prepareCaption(processedContent) {
     let caption = processedContent.text || '';
@@ -168,113 +184,153 @@ class MediaProcessor {
   }
 
   /**
-   * Pubblica un gruppo di media come un unico post
-   * @param {Object} groupData - Dati del gruppo di media
-   * @param {Object} channelConfig - Configurazione del canale
-   * @returns {Boolean} Successo della pubblicazione
+   * Invia un messaggio di testo
+   */
+  async sendTextMessage(text, topicId) {
+    const url = `https://api.telegram.org/bot${this.botToken}/sendMessage`;
+    const data = {
+      chat_id: this.destinationChannelId,
+      message_thread_id: topicId,
+      text: text,
+      parse_mode: 'HTML'
+    };
+    
+    const response = await axios.post(url, data);
+    return response.data;
+  }
+  
+  /**
+   * Invia una foto
+   */
+  async sendPhoto(filePath, caption, topicId) {
+    const url = `https://api.telegram.org/bot${this.botToken}/sendPhoto`;
+    const formData = new FormData();
+    
+    formData.append('chat_id', this.destinationChannelId);
+    formData.append('message_thread_id', topicId);
+    formData.append('photo', fs.createReadStream(filePath));
+    formData.append('caption', caption);
+    
+    const response = await axios.post(url, formData, {
+      headers: formData.getHeaders()
+    });
+    
+    return response.data;
+  }
+  
+  /**
+   * Invia un documento
+   */
+  async sendDocument(filePath, caption, topicId) {
+    const url = `https://api.telegram.org/bot${this.botToken}/sendDocument`;
+    const formData = new FormData();
+    
+    formData.append('chat_id', this.destinationChannelId);
+    formData.append('message_thread_id', topicId);
+    formData.append('document', fs.createReadStream(filePath));
+    formData.append('caption', caption);
+    
+    const response = await axios.post(url, formData, {
+      headers: formData.getHeaders()
+    });
+    
+    return response.data;
+  }
+  
+  /**
+   * Invia un video
+   */
+  async sendVideo(filePath, caption, topicId) {
+    const url = `https://api.telegram.org/bot${this.botToken}/sendVideo`;
+    const formData = new FormData();
+    
+    formData.append('chat_id', this.destinationChannelId);
+    formData.append('message_thread_id', topicId);
+    formData.append('video', fs.createReadStream(filePath));
+    formData.append('caption', caption);
+    
+    const response = await axios.post(url, formData, {
+      headers: formData.getHeaders()
+    });
+    
+    return response.data;
+  }
+
+  /**
+   * Pubblica un gruppo di media
    */
   async publishMediaGroup(groupData, channelConfig) {
     try {
-      const bot = this.telegramService.getBot();
       const userClient = this.telegramService.getUserClient();
       
-      // Se non ci sono media o originali, non possiamo procedere
-      if (!groupData.originalMessages || groupData.originalMessages.length === 0) {
-        logger.warn('Nessun messaggio originale trovato nel gruppo');
-        return false;
-      }
-
       // Prepara il testo
       const caption = this.prepareCaption({
         text: groupData.text,
         price: groupData.price
       });
       
-      // Per album di foto: carichiamo tutte le foto e le inviamo come mediaGroup
-      if (groupData.originalMessages.length > 1) {
-        try {
-          const mediaArray = [];
-          
-          // Prepara l'array di media
-          for (let i = 0; i < groupData.originalMessages.length; i++) {
-            const msg = groupData.originalMessages[i];
-            if (msg.media) {
-              const mediaBuffer = await userClient.downloadMedia(msg.media);
-              
-              // Il primo media avrà la caption
-              if (i === 0) {
-                mediaArray.push({
-                  type: 'photo',
-                  media: { source: mediaBuffer },
-                  caption: caption
-                });
-              } else {
-                mediaArray.push({
-                  type: 'photo',
-                  media: { source: mediaBuffer }
-                });
-              }
-            }
-          }
-          
-          // Invia il gruppo di media
-          if (mediaArray.length > 0) {
-            await bot.api.sendMediaGroup(this.destinationChannelId, mediaArray, {
-              message_thread_id: channelConfig.destinationTopic
-            });
-            
-            logger.info(`Gruppo di media inviato con successo nel topic Articoli`);
-            return true;
-          }
-        } catch (groupError) {
-          logger.error(`Errore nell'invio del gruppo di media: ${groupError.message}`);
-          
-          // Fallback: invia le immagini una per una
-          logger.info(`Provando il fallback: invio singolo...`);
-          const firstMsg = groupData.originalMessages[0];
-          
-          if (firstMsg && firstMsg.media) {
-            const mediaBuffer = await userClient.downloadMedia(firstMsg.media);
-            
-            // Invia la prima immagine con la caption
-            const sentMessage = await bot.api.sendPhoto(this.destinationChannelId, mediaBuffer, {
-              message_thread_id: channelConfig.destinationTopic,
-              caption: caption
-            });
-            
-            // Invia le altre immagini come risposta
-            for (let i = 1; i < groupData.originalMessages.length; i++) {
-              const msg = groupData.originalMessages[i];
-              if (msg.media) {
-                const mediaBuffer = await userClient.downloadMedia(msg.media);
-                await bot.api.sendPhoto(this.destinationChannelId, mediaBuffer, {
-                  message_thread_id: channelConfig.destinationTopic,
-                  reply_to_message_id: sentMessage.message_id
-                });
-              }
-            }
-            
-            return true;
-          }
-        }
-      } else {
-        // Per messaggi singoli
-        const msg = groupData.originalMessages[0];
-        if (msg && msg.media) {
-          const mediaBuffer = await userClient.downloadMedia(msg.media);
-          
-          // Invia il media con la caption
-          await bot.api.sendPhoto(this.destinationChannelId, mediaBuffer, {
-            message_thread_id: channelConfig.destinationTopic,
-            caption: caption
-          });
-          
-          logger.info(`Media singolo inviato con successo nel topic Articoli`);
-          return true;
-        }
+      // Se non ci sono messaggi, esci
+      if (!groupData.originalMessages || groupData.originalMessages.length === 0) {
+        logger.warn('Nessun messaggio originale trovato nel gruppo');
+        return false;
       }
       
-      return false;
+      // Invia il primo messaggio con il testo
+      const firstMsg = groupData.originalMessages[0];
+      if (firstMsg && firstMsg.media) {
+        const mediaBuffer = await userClient.downloadMedia(firstMsg.media);
+        if (!mediaBuffer || mediaBuffer.length === 0) {
+          throw new Error('Download del primo media fallito');
+        }
+        
+        const filePath = await this.saveTempMediaFile(mediaBuffer, firstMsg.media.className);
+        
+        // Invia il primo messaggio con tutto il testo
+        const sentMessage = await this.sendPhoto(filePath, caption, channelConfig.destinationTopic);
+        await this.cleanupTempFile(filePath);
+        
+        logger.info(`Prima immagine del gruppo inviata con successo`);
+        
+        // Invia le immagini rimanenti come risposta
+        if (groupData.originalMessages.length > 1) {
+          for (let i = 1; i < groupData.originalMessages.length; i++) {
+            const msg = groupData.originalMessages[i];
+            if (msg && msg.media) {
+              try {
+                const mediaBuffer = await userClient.downloadMedia(msg.media);
+                if (!mediaBuffer || mediaBuffer.length === 0) continue;
+                
+                const filePath = await this.saveTempMediaFile(mediaBuffer, msg.media.className);
+                
+                // Invia senza caption (solo come immagine)
+                const formData = new FormData();
+                formData.append('chat_id', this.destinationChannelId);
+                formData.append('message_thread_id', channelConfig.destinationTopic);
+                formData.append('photo', fs.createReadStream(filePath));
+                formData.append('reply_to_message_id', sentMessage.result.message_id);
+                
+                const url = `https://api.telegram.org/bot${this.botToken}/sendPhoto`;
+                await axios.post(url, formData, {
+                  headers: formData.getHeaders()
+                });
+                
+                await this.cleanupTempFile(filePath);
+                logger.info(`Immagine ${i+1} del gruppo inviata come risposta`);
+              } catch (err) {
+                logger.error(`Errore invio immagine ${i+1}: ${err.message}`);
+                // Continua comunque con il prossimo
+              }
+            }
+          }
+        }
+        
+        return true;
+      } else {
+        // Non ci sono media, invia solo testo
+        await this.sendTextMessage(caption, channelConfig.destinationTopic);
+        logger.info(`Messaggio di gruppo (solo testo) inviato con successo`);
+        return true;
+      }
     } catch (error) {
       logger.error(`Errore nella pubblicazione del gruppo di media: ${error.message}`);
       return false;

@@ -297,3 +297,109 @@ function setupApiRoutes(app) {
 
 // Avvia l'applicazione
 main();
+
+/*
+
+ultimo messsaggio di errore della console 
+
+tarting `node src/index.js`
+2025-04-29 17:10:45 [info]: 🚀 Avvio Monitor Bot Telegram 
+2025-04-29 17:10:47 [info]: MongoDB connesso 
+2025-04-29 17:10:47 [info]: 📊 MongoDB connesso
+[2025-04-29T17:10:47.144] [INFO] - [Running gramJS version 2.26.21]
+[2025-04-29T17:10:47.156] [INFO] - [Connecting to 149.154.167.91:80/TCPFull...]
+[2025-04-29T17:10:47.237] [INFO] - [Connection to 149.154.167.91:80/TCPFull complete!]
+[2025-04-29T17:10:47.238] [INFO] - [Using LAYER 198 for initial connect]
+2025-04-29 17:10:47 [info]: User client connesso con sessione esistente 
+2025-04-29 17:10:48 [info]: Bot inizializzato 
+2025-04-29 17:10:48 [info]: 🔌 Telegram inizializzato
+2025-04-29 17:10:48 [info]: Server in ascolto sulla porta 3000
+2025-04-29 17:10:48 [info]: Bot ha accesso al canale: LAFENICE RESELLING 
+2025-04-29 17:10:48 [info]: Bot status nel canale: administrator 
+2025-04-29 17:12:24 [debug]: Messaggio ricevuto da: -1002562147025, ID: 114 
+2025-04-29 17:12:35 [debug]: Messaggio ricevuto da: -1001709917801, ID: 101077 
+2025-04-29 17:12:35 [debug]: Messaggio ricevuto da: -1001709917801, ID: 101078
+2025-04-29 17:12:35 [debug]: Messaggio ricevuto da: -1001709917801, ID: 101076
+2025-04-29 17:12:35 [debug]: Messaggio ricevuto da: -1001709917801, ID: 101075 
+2025-04-29 17:12:35 [info]: ✅ Messaggio dal canale monitorato: Pandabuy-HOOBUY-ALLCHINABUY-CNFANSBUY FIND ACBUY 
+2025-04-29 17:12:35 [info]: ✅ Messaggio dal canale monitorato: Pandabuy-HOOBUY-ALLCHINABUY-CNFANSBUY FIND ACBUY
+2025-04-29 17:12:36 [debug]: Processamento messaggio ID: 101077 
+2025-04-29 17:12:36 [debug]: Media trovato di tipo: MessageMediaPhoto
+2025-04-29 17:12:36 [debug]: Processamento messaggio ID: 101078 
+2025-04-29 17:12:36 [debug]: Media trovato di tipo: MessageMediaPhoto
+2025-04-29 17:12:36 [debug]: Messaggio 101077 marcato come processato 
+2025-04-29 17:12:36 [debug]: Messaggio 101078 marcato come processato
+2025-04-29 17:12:36 [info]: ✅ Messaggio dal canale monitorato: Pandabuy-HOOBUY-ALLCHINABUY-CNFANSBUY FIND ACBUY 
+2025-04-29 17:12:36 [info]: ✅ Messaggio dal canale monitorato: Pandabuy-HOOBUY-ALLCHINABUY-CNFANSBUY FIND ACBUY 
+2025-04-29 17:12:36 [debug]: Processamento messaggio ID: 101076
+2025-04-29 17:12:36 [debug]: Media trovato di tipo: MessageMediaPhoto
+2025-04-29 17:12:37 [debug]: Processamento messaggio ID: 101075 
+2025-04-29 17:12:37 [debug]: Prezzo estratto: {"original":15.11,"markup":2.5687,"final":17.68,"currency":"$"}
+2025-04-29 17:12:37 [debug]: Media trovato di tipo: MessageMediaPhoto
+2025-04-29 17:12:37 [debug]: Messaggio 101076 marcato come processato 
+2025-04-29 17:12:37 [debug]: Messaggio 101075 marcato come processato 
+2025-04-29 17:12:38 [info]: Pubblicazione gruppo media 13967516440485801 (1 media) 
+2025-04-29 17:12:38 [debug]: Preparazione gruppo media: 1 messaggi
+2025-04-29 17:12:38 [debug]: Tentativo download media di tipo: MessageMediaPhoto
+[2025-04-29T17:12:38.108] [INFO] - [Starting direct file download in chunks of 131072 at 0, stride 131072]
+2025-04-29 17:12:38 [info]: Pubblicazione gruppo media 13967516440485801 (1 media) 
+2025-04-29 17:12:38 [debug]: Preparazione gruppo media: 1 messaggi
+2025-04-29 17:12:38 [debug]: Tentativo download media di tipo: MessageMediaPhoto
+[2025-04-29T17:12:38.126] [INFO] - [Starting direct file download in chunks of 131072 at 0, stride 131072]
+[2025-04-29T17:12:38.230] [INFO] - [Connecting to 91.108.56.176:443/TCPFull...]
+2025-04-29 17:12:39 [info]: Pubblicazione gruppo media 13967516440485801 (1 media) 
+2025-04-29 17:12:39 [debug]: Preparazione gruppo media: 1 messaggi
+2025-04-29 17:12:39 [debug]: Tentativo download media di tipo: MessageMediaPhoto
+[2025-04-29T17:12:39.078] [INFO] - [Starting direct file download in chunks of 131072 at 0, stride 131072]
+2025-04-29 17:12:39 [debug]: Messaggio ricevuto da: -1002562147025, ID: 115
+2025-04-29 17:12:39 [info]: Pubblicazione gruppo media 13967516440485801 (1 media) 
+2025-04-29 17:12:39 [debug]: Preparazione gruppo media: 1 messaggi
+2025-04-29 17:12:39 [debug]: Tentativo download media di tipo: MessageMediaPhoto
+[2025-04-29T17:12:39.198] [INFO] - [Starting direct file download in chunks of 131072 at 0, stride 131072]
+[2025-04-29T17:12:40.821] [INFO] - [Connection to 91.108.56.176:443/TCPFull complete!]
+[2025-04-29T17:12:40.822] [INFO] - [Exporting authorization for data center 91.108.56.176 with layer 198]
+2025-04-29 17:12:53 [error]: Errore invio gruppo media: Call to 'sendMediaGroup' failed! (400: Bad Request: can't parse InputMedia: Field "media" must be of type String)
+Error: TIMEOUT
+    at D:\2K25\bot\node_modules\telegram\client\updates.js:250:85
+    at async _updateLoop (D:\2K25\bot\node_modules\telegram\client\updates.js:191:17)
+[2025-04-29T17:13:02.601] [INFO] - [Started reconnecting]
+[2025-04-29T17:13:02.602] [WARN] - [[Reconnect] Closing current connection...]
+[2025-04-29T17:13:02.604] [INFO] - [Disconnecting from 149.154.167.91:80/TCPFull...]
+[2025-04-29T17:13:02.605] [WARN] - [Connection closed while receiving data]
+Error: Not connected
+    at ConnectionTCPFull.recv (D:\2K25\bot\node_modules\telegram\network\connection\Connection.js:71:15)
+    at runNextTicks (node:internal/process/task_queues:60:5)
+    at listOnTimeout (node:internal/timers:545:9)
+    at process.processTimers (node:internal/timers:519:7)
+    at async MTProtoSender._recvLoop (D:\2K25\bot\node_modules\telegram\network\MTProtoSender.js:373:24)
+[2025-04-29T17:13:02.608] [INFO] - [Connecting to 149.154.167.91:80/TCPFull...]
+[2025-04-29T17:13:02.610] [INFO] - [Started reconnecting]
+[2025-04-29T17:13:02.610] [WARN] - [[Reconnect] Closing current connection...]
+[2025-04-29T17:13:02.610] [INFO] - [Disconnecting from 91.108.56.176:443/TCPFull...]
+[2025-04-29T17:13:02.613] [WARN] - [Connection closed while receiving data]
+Error: Not connected
+    at ConnectionTCPFull.recv (D:\2K25\bot\node_modules\telegram\network\connection\Connection.js:71:15)
+    at async MTProtoSender._recvLoop (D:\2K25\bot\node_modules\telegram\network\MTProtoSender.js:373:24)
+[2025-04-29T17:13:02.620] [INFO] - [Connecting to 91.108.56.176:443/TCPFull...]
+[2025-04-29T17:13:02.622] [INFO] - [connection closed]
+[2025-04-29T17:13:02.623] [INFO] - [connection closed]
+[2025-04-29T17:13:06.661] [INFO] - [Connection to 149.154.167.91:80/TCPFull complete!]
+[2025-04-29T17:13:06.662] [INFO] - [Handling reconnect!]
+[2025-04-29T17:13:06.807] [INFO] - [Connection to 91.108.56.176:443/TCPFull complete!]
+[2025-04-29T17:13:13.555] [WARN] - [Disconnecting...]
+[2025-04-29T17:13:13.556] [INFO] - [Disconnecting from 91.108.56.176:443/TCPFull...]
+[2025-04-29T17:13:13.557] [INFO] - [connection closed]
+2025-04-29 17:13:15 [error]: Errore invio singolo: Call to 'sendPhoto' failed! (400: Bad Request: wrong remote file identifier specified: Wrong character in the string)
+2025-04-29 17:13:15 [error]: Errore nella pubblicazione del gruppo 13967516440485801
+2025-04-29 17:13:17 [error]: Errore invio gruppo media: Call to 'sendMediaGroup' failed! (400: Bad Request: can't parse InputMedia: Field "media" must be of type String)
+2025-04-29 17:13:25 [error]: Errore invio singolo: Call to 'sendPhoto' failed! (400: Bad Request: wrong remote file identifier specified: Wrong string length)
+2025-04-29 17:13:25 [error]: Errore nella pubblicazione del gruppo 13967516440485801
+2025-04-29 17:13:26 [error]: Errore invio gruppo media: Call to 'sendMediaGroup' failed! (400: Bad Request: can't parse InputMedia: Field "media" must be of type String)
+2025-04-29 17:13:36 [error]: Errore invio singolo: Call to 'sendPhoto' failed! (400: Bad Request: wrong remote file identifier specified: Wrong character in the string)
+2025-04-29 17:13:36 [error]: Errore nella pubblicazione del gruppo 13967516440485801
+2025-04-29 17:13:39 [error]: Errore invio gruppo media: Call to 'sendMediaGroup' failed! (400: Bad Request: can't parse InputMedia: Field "media" must be of type String)
+2025-04-29 17:13:45 [error]: Errore invio singolo: Call to 'sendPhoto' failed! (400: Bad Request: wrong remote file identifier specified: Wrong string length)
+2025-04-29 17:13:45 [error]: Errore nella pubblicazione del gruppo 13967516440485801
+
+
+* */
