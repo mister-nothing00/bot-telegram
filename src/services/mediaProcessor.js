@@ -158,7 +158,7 @@ class MediaProcessor {
   /**
    * Prepara la descrizione formattata del messaggio
    */
-  prepareCaption(processedContent, channelConfig) {  // Aggiungi channelConfig come parametro
+  prepareCaption(processedContent, channelConfig) {
     let caption = processedContent.text || "";
   
     // Se il testo è vuoto dopo la pulizia, usa un messaggio generico
@@ -178,9 +178,34 @@ class MediaProcessor {
       finalCaption += `\n\n💰 Price: ${processedContent.price.final} ${processedContent.price.currency}`;
     }
     
-    // Aggiungi il canale di provenienza se disponibile
-    if (channelConfig && channelConfig.channelName) {
-      finalCaption += `\n\n📱 Source: ${channelConfig.channelName}`;
+    // Aggiungi il canale di provenienza come Source: X, dove X è l'indice del canale
+    if (channelConfig && channelConfig.channelId) {
+      // Ottieni tutti i canali monitorati
+      const fs = require('fs');
+      const path = require('path');
+      const monitoredChannelsPath = path.join(process.cwd(), 'monitored-channels.json');
+      
+      try {
+        const monitoredChannelsData = fs.readFileSync(monitoredChannelsPath, 'utf8');
+        const monitoredChannels = JSON.parse(monitoredChannelsData);
+        
+        // Trova l'indice del canale corrente
+        const channelIndex = monitoredChannels.channels.findIndex(
+          channel => channel.id === channelConfig.channelId
+        );
+        
+        if (channelIndex !== -1) {
+          // Aggiungi Source: X, dove X è l'indice del canale (partendo da 1 per facilità d'uso)
+          finalCaption += `\n\n📱 Source: ${channelIndex + 1}`;
+        } else {
+          // Fallback nel caso in cui il canale non fosse trovato nell'array
+          finalCaption += `\n\n📱 Source: Unknown`;
+        }
+      } catch (error) {
+        // In caso di errore, usa un formato generico
+        finalCaption += `\n\n📱 Source: Unknown`;
+        logger.error(`Errore nella lettura del file monitored-channels.json: ${error.message}`);
+      }
     }
     
     return finalCaption;
