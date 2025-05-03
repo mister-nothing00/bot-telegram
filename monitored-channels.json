@@ -3,53 +3,23 @@
   "destinationTopicId": 30,
   "channels": [
     {
-      "id": "-1002371801983",
-      "name": "China2UFind (C2ufashion)",
-      "description": "Prodotti moda e abbigliamento",
-      "active": true,
-      "category": "fashion",
-      "mediaTypes": {
-        "photos": true,
-        "videos": false,
-        "documents": false
-      },
-      "includeText": true,
-      "includePrice": true,
-      "priceRegex": "€\\s*\\d+([.,]\\d{1,2})?|\\d+([.,]\\d{1,2})?\\s*€"
-    },
-    {
-      "id": "-1001791257338",
-      "name": "CNFANS Finds🔎",
-      "description": "Prodotti moda e abbigliamento",
-      "active": true,
-      "category": "fashion",
-      "mediaTypes": {
-        "photos": true,
-        "videos": false,
-        "documents": false
-      },
-      "includeText": true,
-      "includePrice": true,
-      "priceRegex": "€\\s*\\d+([.,]\\d{1,2})?|\\d+([.,]\\d{1,2})?\\s*€"
-    },
-    {
-      "id": "-1002038422524",
-      "name": "🔎 FashionReps🌎",
-      "description": "Prodotti moda e abbigliamento",
-      "active": true,
-      "category": "fashion",
-      "mediaTypes": {
-        "photos": true,
-        "videos": false,
-        "documents": false
-      },
-      "includeText": true,
-      "includePrice": true,
-      "priceRegex": "€\\s*\\d+([.,]\\d{1,2})?|\\d+([.,]\\d{1,2})?\\s*€"
-    },
-    {
       "id": "-1001221031571",
       "name": "Pandabuy CnFans HooBuy ACBuy Hacoo Find🔎🐼",
+      "description": "Repliche e prodotti cinesi",
+      "active": true,
+      "category": "fashion",
+      "mediaTypes": {
+        "photos": true,
+        "videos": false,
+        "documents": false
+      },
+      "includeText": true,
+      "includePrice": true,
+      "priceRegex": "€\\s*\\d+([.,]\\d{1,2})?|\\d+([.,]\\d{1,2})?\\s*€"
+    },
+    {
+      "id": "-1001709917801",
+      "name": "Pandabuy-HOOBUY-ALLCHINABUY-CNFANSBUY FIND ACBUY",
       "description": "Repliche e prodotti cinesi",
       "active": true,
       "category": "fashion",
@@ -78,9 +48,24 @@
       "priceRegex": "€\\s*\\d+([.,]\\d{1,2})?|\\d+([.,]\\d{1,2})?\\s*€"
     },
     {
-      "id": "-1001709917801",
-      "name": "Pandabuy-HOOBUY-ALLCHINABUY-CNFANSBUY FIND ACBUY",
-      "description": "Repliche e prodotti cinesi",
+      "id": "-1002038422524",
+      "name": "🔎FashionReps🌎",
+      "description": "Prodotti moda e abbigliamento",
+      "active": true,
+      "category": "fashion",
+      "mediaTypes": {
+        "photos": true,
+        "videos": false,
+        "documents": false
+      },
+      "includeText": true,
+      "includePrice": true,
+      "priceRegex": "€\\s*\\d+([.,]\\d{1,2})?|\\d+([.,]\\d{1,2})?\\s*€"
+    },
+    {
+      "id": "-1002371801983",
+      "name": "China2UFind (C2ufashion)",
+      "description": "Prodotti moda e abbigliamento",
       "active": true,
       "category": "fashion",
       "mediaTypes": {

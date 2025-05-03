@@ -2,93 +2,79 @@
  * ContentCleaner - Servizio per pulire e formattare il contenuto dei messaggi
  *
  * Responsabilità:
- * 1. Rimuovere tutti i tipi di link esterni
+ * 1. Estrarre il nome dell'articolo dai vari template
  * 2. Estrarre prezzi in diversi formati
- * 3. Applicare markup ai prezzi
- * 4. Formattare il testo in modo coerente
+ * 3. Applicare markup ai prezzi (25%)
+ * 4. Rimuovere tutti i link e contenuti non necessari
  */
 class ContentCleaner {
   /**
-   * Rimuove tutti i tipi di link e riferimenti esterni dal testo
+   * Estrae il nome dell'articolo dal testo in base a vari pattern
    * @param {String} text - Testo originale
-   * @returns {String} Testo pulito
+   * @returns {String|null} Nome dell'articolo o null se non trovato
+   */
+  extractArticleName(text) {
+    if (!text) return null;
+    
+    // Array di pattern per l'estrazione dell'articolo
+    const patterns = [
+      // Formato "Article: X" o "Article : X" o "Article :X"
+      /Article\s*:+\s*([^$\n]+)/i,
+      
+      // Formato "Article:X" o "Article :X"
+      /Article:+\s*([^$\n]+)/i,
+      
+      // Altre varianti come "Article :" 
+      /Article\s+:\s*([^$\n]+)/i,
+      
+      // "ℹ️Article:" o altri emoji + Article
+      /[^\w]*Article:+\s*([^$\n]+)/i,
+      
+      // 🔍Article:
+      /🔍\s*Article:+\s*([^$\n]+)/i,
+      
+      // Nome articolo preceduto da emoji senza la parola "Article"
+      /🔍\s*:\s*([^$\n]+)/i,
+      
+      // Cerca anche senza spazi dopo i due punti
+      /Article:([^$\n]+)/i
+    ];
+    
+    // Cerca l'articolo in base ai pattern
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match && match[1]) {
+        return match[1].trim();
+      }
+    }
+    
+    // Se non troviamo l'articolo con i pattern specifici, cerchiamo la prima riga utile
+    const lines = text.split('\n');
+    for (const line of lines) {
+      if (line.trim() && 
+          !line.match(/link|price|prezzo|seller|weidian|cnfans|spreadsheet|trusted|official|discord|instagram|telegram/i) &&
+          !line.match(/[🔗📱💰💯🔍📊📈📋📌📎🏆✅]/)) {
+        return line.trim();
+      }
+    }
+    
+    return null;
+  }
+
+  /**
+   * Rimuove tutti i tipi di link e riferimenti esterni dal testo
+   * Ora estrae solo l'articolo e tralascia tutto il resto
+   * @param {String} text - Testo originale
+   * @returns {String} Solo il nome dell'articolo
    */
   removeLinks(text) {
     if (!text) return '';
     
-    // Prima salvare il contenuto che vogliamo mantenere
-    let articleMatch = text.match(/Article:\s*([^$\n]+)/i);
-    let articleName = articleMatch ? articleMatch[1].trim() : null;
+    // Estrai solo il nome dell'articolo
+    const articleName = this.extractArticleName(text);
     
-    let priceMatch = text.match(/Price\s*:\s*\$?\s*(\d+([.,]\d{1,2})?)/i);
-    let price = priceMatch ? priceMatch[1] : null;
-    
-    // Rimuovere sezioni intere con link
-    let lines = text.split('\n');
-    let cleanedLines = [];
-    
-    for (let line of lines) {
-      // Salta linee che contengono parole chiave associate a link
-      if (
-        !/link|weidian|cnfans|allchinabuy|hoobuy|mulebuy|loongbuy|oopbuy|kakobuy|customer service|telegram|discord|whatsapp|spreadsheet|🔗|📋|📎|💯|✅/i.test(line) &&
-        !/\*\*.*\*\*/i.test(line) // Rimuovi linee con testo tra asterischi doppi
-      ) {
-        cleanedLines.push(line);
-      }
-    }
-    
-    // Ricrea il testo base
-    text = cleanedLines.join('\n');
-    
-    // Array di pattern da rimuovere
-    const patterns = [
-      // URL e link
-      /https?:\/\/[^\s]+/g,
-      /t\.me\/[^\s]+/g,
-      
-      // Menzioni e tag
-      /@\w+/g,
-      /#\w+/g,
-      
-      // Pattern specifici osservati negli screenshot
-      /\*\*.*?Link.*?\*\*/gi,
-      /\*\*.*?Service.*?\*\*/gi,
-      /\*\*.*?spreadsheet.*?\*\*/gi,
-      /\*\*.*?official.*?\*\*/gi,
-      
-      // Emoji e simboli associati a link
-      /🔗|📋|💯|📎|🧷|➡️|🌐|🔍/g,
-      
-      // Rimuovere tutto ciò che è tra ** **
-      /\*\*.*?\*\*/g,
-      
-      // Parole chiave specifiche
-      /\b(weidian|cnfans|allchinabuy|hoobuy|mulebuy|loongbuy|oopbuy|kakobuy)\b/gi,
-      /\b(customer service|telegram|discord|whatsapp)\b/gi,
-      /\b(spreadsheet|coupon|now)\b/gi,
-      
-      // Simboli e formattazione speciale
-      /✅|❤️|💕|🔥|💪|👌/g
-    ];
-    
-    // Applica tutti i pattern di pulizia
-    patterns.forEach(pattern => {
-      text = text.replace(pattern, '');
-    });
-    
-    // Pulisci le linee vuote multiple e spazi
-    text = text.replace(/\n{3,}/g, '\n\n');
-    text = text.replace(/\s+/g, ' ');
-    text = text.trim();
-    
-    // Se abbiamo un articolo e/o un prezzo, ricostruiamo il testo principale
-    let result = '';
-    
-    if (articleName) {
-      result = articleName;
-    }
-    
-    return result;
+    // Restituisci solo il nome dell'articolo
+    return articleName || '';
   }
 
   /**
@@ -100,28 +86,44 @@ class ContentCleaner {
   extractPrice(text, customRegex = null) {
     if (!text) return null;
     
+    // Pattern specifico per CNY conversioni (es: "Price :CNY ¥ 179.00 ≈ $ 27.12")
+    const cnyPattern = /Price\s*:CNY\s*¥\s*(\d+([.,]\d{1,2})?)\s*(?:≈|=)\s*\$\s*(\d+([.,]\d{1,2})?)/i;
+    const cnyMatch = text.match(cnyPattern);
+    if (cnyMatch && cnyMatch[3]) {
+      // Usa il valore convertito in dollari se disponibile
+      const price = parseFloat(cnyMatch[3].replace(',', '.'));
+      if (!isNaN(price)) {
+        return {
+          original: price,
+          currency: '$'
+        };
+      }
+    }
+    
     // Patterns per diversi formati di prezzo
     const patterns = [
-      // $ prima del numero
-      /\$\s*(\d+([.,]\d{1,2})?)/i,  // $18.33
+      // Formato "Price: X$" o "Price: X €" o "Price: $ X"
+      /Price\s*:?\s*\$?\s*(\d+([.,]\d{1,2})?)/i,  // Price: 18.33
+      /Price\s*:?\s*(\d+([.,]\d{1,2})?)\s*\$/i,   // Price: 18.33$
+      /Price\s*:?\s*\$\s*(\d+([.,]\d{1,2})?)/i,   // Price: $18.33
+      /Price\s*:?\s*€?\s*(\d+([.,]\d{1,2})?)/i,   // Price: 18.33
+      /Price\s*:?\s*(\d+([.,]\d{1,2})?)\s*€/i,    // Price: 18.33€
+      /Price\s*:?\s*€\s*(\d+([.,]\d{1,2})?)/i,    // Price: €18.33
       
-      // € prima del numero
-      /€\s*(\d+([.,]\d{1,2})?)/i,   // €18.33
-      
-      // Formato "Price: X$"
-      /Price:?\s*(\d+([.,]\d{1,2})?)\s*\$/i,  // Price: 18.33$
-      /Price:?\s*\$\s*(\d+([.,]\d{1,2})?)/i,  // Price: $18.33
-      
-      // Formato "Price: X€"
-      /Price:?\s*(\d+([.,]\d{1,2})?)\s*€/i,  // Price: 18.33€
-      /Price:?\s*€\s*(\d+([.,]\d{1,2})?)/i,  // Price: €18.33
-      
-      // Simbolo dopo il numero
+      // Formato con simbolo di valuta e prezzo
+      /\$\s*(\d+([.,]\d{1,2})?)/i,   // $18.33
       /(\d+([.,]\d{1,2})?)\s*\$/i,   // 18.33$
-      /(\d+([.,]\d{1,2})?)\s*€/i,     // 18.33€
+      /€\s*(\d+([.,]\d{1,2})?)/i,    // €18.33
+      /(\d+([.,]\d{1,2})?)\s*€/i,    // 18.33€
       
-      // Formato "X$" o "X€" generico
-      /(\d+([.,]\d{1,2})?)\s*(\$|€)/i, // 18.33$ o 18.33€
+      // Formati con emoji 💰 
+      /💰\s*Price\s*:?\s*(\d+([.,]\d{1,2})?)/i,  // 💰Price: 18.33
+      /💰\s*Price\s*:?\s*\$\s*(\d+([.,]\d{1,2})?)/i,  // 💰Price: $18.33
+      /💰\s*Price\s*:?\s*(\d+([.,]\d{1,2})?)\s*\$/i,  // 💰Price: 18.33$
+      
+      // Cerca dopo un simbolo di valuta tra 0 e 20 caratteri quindi un numero (per formati strani)
+      /\$[^0-9]{0,20}(\d+([.,]\d{1,2})?)/i,  // $ ... 18.33
+      /€[^0-9]{0,20}(\d+([.,]\d{1,2})?)/i,   // € ... 18.33
     ];
     
     // Aggiungi eventuale regex personalizzata
@@ -137,13 +139,20 @@ class ContentCleaner {
     // Cerca il prezzo in base ai pattern
     for (const pattern of patterns) {
       const match = text.match(pattern);
-      if (match) {
+      if (match && match[1]) {
         // Converti in numero float
-        const price = parseFloat(match[1].replace(',', '.'));
+        const priceStr = match[1].replace(',', '.');
+        const price = parseFloat(priceStr);
         if (!isNaN(price)) {
+          // Determina la valuta
+          let currency = '$';  // Imposta $ come default
+          if (match[0].includes('€')) {
+            currency = '€';
+          }
+          
           return {
             original: price,
-            currency: match[0].includes('€') ? '€' : '$'
+            currency: currency
           };
         }
       }
@@ -155,10 +164,10 @@ class ContentCleaner {
   /**
    * Applica markup al prezzo
    * @param {Object} price - Informazioni sul prezzo
-   * @param {Number} markupPercentage - Percentuale di markup
+   * @param {Number} markupPercentage - Percentuale di markup (25%)
    * @returns {Object} Prezzo con markup applicato
    */
-  applyMarkup(price, markupPercentage = 17) {
+  applyMarkup(price, markupPercentage = 25) {  // Default a 25%
     if (!price) return null;
     
     const markup = price.original * (markupPercentage / 100);
@@ -173,27 +182,24 @@ class ContentCleaner {
   }
 
   /**
-   * Formatta il testo in modo standardizzato
+   * Formatta il testo eliminando caratteri superflui
    * @param {String} text - Testo da formattare
    * @returns {String} Testo formattato
    */
   formatText(text) {
     if (!text) return '';
     
-    // 1. Rimuovi link
-    text = this.removeLinks(text);
-    
-    // 2. Normalizza gli spazi
+    // Normalizza gli spazi e rimuovi caratteri speciali
     text = text.replace(/\s+/g, ' ').trim();
     
-    // 3. Formatta i punti elenco
-    text = text.replace(/^[-*•]\s*/gm, '• ');
+    // Rimuovi emoji e altri caratteri speciali
+    text = text.replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu, '');
     
-    // 4. Assicurati che ci siano spazi dopo la punteggiatura
-    text = text.replace(/([.,!?])([^\s])/g, '$1 $2');
+    // Rimuovi punteggiatura extra
+    text = text.replace(/[^\w\s.,!?'"-]/g, '');
     
-    // 5. Capitalizza la prima lettera di ogni frase
-    text = text.replace(/(^|[.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase());
+    // Rimuovi spazi multipli
+    text = text.replace(/\s+/g, ' ').trim();
     
     return text;
   }
