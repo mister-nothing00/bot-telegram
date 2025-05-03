@@ -50,19 +50,29 @@ async function main() {
     // Verifica permessi del bot nel canale di destinazione
     verifyBotPermissions();
     
-    // Cache per i gruppi di media
-    // Struttura: Map<groupId, { media: [], text: '', timestamp: Date, ... }>
+    // Cache per i gruppi di media - usa Map<string, object> per i gruppi
     const mediaGroups = new Map();
     
     // Cleanup periodico dei gruppi di media non completati
     setInterval(() => {
       const now = Date.now();
+      let groupsRemoved = 0;
+      
       for (const [groupId, group] of mediaGroups.entries()) {
         // Rimuovi gruppi più vecchi di 5 minuti
         if (now - group.timestamp > 300000) {
-          logger.warn(`Gruppo media ${groupId} scaduto dopo 5 minuti - rimosso`);
+          // Cancella eventuali timer in sospeso
+          if (group.timerId) {
+            clearTimeout(group.timerId);
+          }
+          
           mediaGroups.delete(groupId);
+          groupsRemoved++;
         }
+      }
+      
+      if (groupsRemoved > 0) {
+        logger.warn(`⚠️ Rimossi ${groupsRemoved} gruppi scaduti dopo 5 minuti`);
       }
     }, 60000); // Controllo ogni minuto
     
@@ -173,24 +183,55 @@ async function verifyBotPermissions() {
 /**
  * Gestisce i messaggi raggruppati (album di foto)
  */
+/**
+ * Gestisce i messaggi raggruppati (album di foto)
+ */
+/**
+ * Gestisce i messaggi raggruppati (album di foto) con maggior debug e attesa
+ */
+/**
+ * Gestisce i messaggi raggruppati (album di foto) - VERSIONE CORRETTA
+ */
+/**
+ * Gestisce i messaggi raggruppati (album di foto) - SOLUZIONE ALTERNATIVA
+ */
 function handleGroupedMessage(mediaGroups, processedContent, channelConfig, message, mediaProcessor, channelController) {
-  const groupId = processedContent.groupedId;
+  // Converti l'ID del gruppo in una stringa
+  const groupIdStr = String(processedContent.groupedId);
   const channelId = `-100${message.peerId.channelId}`;
   
-  // Se il gruppo non esiste ancora, crealo
-  if (!mediaGroups.has(groupId)) {
-    mediaGroups.set(groupId, {
+  logger.info(`⚠️ Ricevuto messaggio ${message.id} del gruppo ${groupIdStr}`);
+  
+  // Verifica se il gruppo esiste già usando una chiave stringa
+  if (!mediaGroups.has(groupIdStr)) {
+    logger.info(`⚠️ Creazione NUOVO gruppo ${groupIdStr}`);
+    
+    // Crea un nuovo gruppo
+    mediaGroups.set(groupIdStr, {
       media: [],
       text: processedContent.text,
       price: processedContent.price,
       channelConfig: channelConfig,
       originalMessages: [],
       timestamp: Date.now(),
+      processed: false,
+      timerId: null, // ID del timer per poterlo cancellare
+      messagesCount: 0
     });
+    
+    // Imposta un timer per elaborare il gruppo dopo X secondi
+    const timeoutId = setTimeout(() => processGroup(groupIdStr, mediaGroups, mediaProcessor), 15000);
+    mediaGroups.get(groupIdStr).timerId = timeoutId;
+    
+    logger.info(`⚠️ Timer impostato per gruppo ${groupIdStr} (15s)`);
+  } else {
+    logger.info(`⚠️ Aggiunta a gruppo ESISTENTE ${groupIdStr}`);
   }
   
-  // Aggiungi il messaggio corrente al gruppo
-  const group = mediaGroups.get(groupId);
+  // Ottieni il gruppo esistente
+  const group = mediaGroups.get(groupIdStr);
+  
+  // Aggiungi il media al gruppo
   if (processedContent.media && processedContent.media.length > 0) {
     group.media.push(...processedContent.media);
   }
@@ -200,39 +241,71 @@ function handleGroupedMessage(mediaGroups, processedContent, channelConfig, mess
     group.text = processedContent.text;
   }
   
-  // Conserva il messaggio originale
+  // Se c'è un prezzo e non c'era, aggiungilo
+  if (processedContent.price && !group.price) {
+    group.price = processedContent.price;
+  }
+  
+  // Aggiungi il messaggio originale
   group.originalMessages.push(message);
+  group.messagesCount++;
+  
+  // Aggiorna il gruppo nella mappa
+  mediaGroups.set(groupIdStr, group);
+  
+  logger.info(`⚠️ Gruppo ${groupIdStr} ora ha ${group.messagesCount} messaggi`);
   
   // Marca il messaggio come processato
   channelController.markMessageAsProcessed(message.id, channelId);
+}
+
+
+/**
+ * Funzione separata per elaborare il gruppo - chiamata dal timer
+ */
+async function processGroup(groupIdStr, mediaGroups, mediaProcessor) {
+  // Verifica se il gruppo esiste ancora e non è già stato elaborato
+  if (!mediaGroups.has(groupIdStr)) {
+    logger.warn(`⚠️ Gruppo ${groupIdStr} non trovato per l'elaborazione`);
+    return;
+  }
   
-  // Attendi un breve periodo per raccogliere tutti i media
-  setTimeout(async () => {
-    // Verifica se il gruppo esiste ancora e non è già stato pubblicato
-    if (mediaGroups.has(groupId)) {
-      const groupData = mediaGroups.get(groupId);
+  const group = mediaGroups.get(groupIdStr);
+  
+  // Se il gruppo è già stato elaborato, esci
+  if (group.processed) {
+    logger.warn(`⚠️ Gruppo ${groupIdStr} già elaborato, ignoro`);
+    return;
+  }
+  
+  // Marca il gruppo come elaborato
+  group.processed = true;
+  mediaGroups.set(groupIdStr, group);
+  
+  logger.info(`⚠️ ELABORAZIONE gruppo ${groupIdStr} con ${group.messagesCount} messaggi`);
+  
+  // Pubblica il gruppo
+  if (group.originalMessages.length > 0) {
+    logger.info(`⚠️ Pubblicazione gruppo ${groupIdStr}`);
+    
+    try {
+      const published = await mediaProcessor.publishMediaGroup(group, group.channelConfig);
       
-      // Pubblica solo se ci sono media o testo
-      if (groupData.media.length > 0 || groupData.text) {
-        logger.info(`Pubblicazione gruppo media ${groupId} (${groupData.media.length} media)`);
-        
-        // Pubblica il gruppo come un unico post
-        const published = await mediaProcessor.publishMediaGroup(
-          groupData,
-          channelConfig
-        );
-        
-        if (published) {
-          logger.info(`Gruppo di messaggi ${groupId} pubblicato con successo`);
-        } else {
-          logger.error(`Errore nella pubblicazione del gruppo ${groupId}`);
-        }
+      if (published) {
+        logger.info(`⚠️ Pubblicazione gruppo ${groupIdStr} RIUSCITA`);
+      } else {
+        logger.error(`⚠️ Pubblicazione gruppo ${groupIdStr} FALLITA`);
       }
-      
-      // Rimuovi il gruppo dalla cache
-      mediaGroups.delete(groupId);
+    } catch (error) {
+      logger.error(`⚠️ Errore elaborazione gruppo ${groupIdStr}: ${error.message}`);
     }
-  }, 2000); // Attendi 2 secondi per raccogliere tutto il gruppo
+  } else {
+    logger.warn(`⚠️ Gruppo ${groupIdStr} vuoto, nessun messaggio da pubblicare`);
+  }
+  
+  // Rimuovi il gruppo dalla mappa
+  mediaGroups.delete(groupIdStr);
+  logger.info(`⚠️ Gruppo ${groupIdStr} rimosso dalla mappa`);
 }
 
 /**

@@ -286,85 +286,316 @@ class MediaProcessor {
   }
 
   /**
-   * Pubblica un gruppo di media
+   * Pubblica un gruppo di media usando sendMediaGroup per mantenere un album unificato
    */
-  async publishMediaGroup(groupData, channelConfig) {
-    try {
-      const userClient = this.telegramService.getUserClient();
-      
-      // Prepara il testo
-      const caption = this.prepareCaption({
-        text: groupData.text,
-        price: groupData.price
-      }, channelConfig);
-      
-      // Se non ci sono messaggi, esci
-      if (!groupData.originalMessages || groupData.originalMessages.length === 0) {
-        logger.warn('Nessun messaggio originale trovato nel gruppo');
-        return false;
+  /**
+ * Pubblica un gruppo di media usando sendMediaGroup per mantenere un album unificato
+ */
+ /**
+ * Pubblica un gruppo di media come un album unificato
+ */
+/**
+ * Pubblica un gruppo di media come un album unificato
+ */
+async publishMediaGroup(groupData, channelConfig) {
+  try {
+    const userClient = this.telegramService.getUserClient();
+    
+    // Debug dettagliato del gruppo
+    logger.info(`⚠️ Inizio pubblicazione gruppo con ${groupData.originalMessages.length} messaggi`);
+    
+    // Prepara il testo
+    const caption = this.prepareCaption({
+      text: groupData.text,
+      price: groupData.price
+    }, channelConfig);
+    
+    // Se non ci sono messaggi, esci
+    if (!groupData.originalMessages || groupData.originalMessages.length === 0) {
+      logger.warn('⚠️ Nessun messaggio originale trovato nel gruppo');
+      return false;
+    }
+    
+    // Più di un messaggio nel gruppo = album vero
+    const isRealAlbum = groupData.originalMessages.length > 1;
+    logger.info(`⚠️ Tipo pubblicazione: ${isRealAlbum ? 'ALBUM MULTIPLO' : 'MESSAGGIO SINGOLO'}`);
+    
+    // Registra gli ID dei messaggi
+    const messageIds = groupData.originalMessages.map(m => m.id).join(', ');
+    logger.info(`⚠️ Messaggi nel gruppo: ${messageIds}`);
+    
+    // Scarica tutti i media in parallelo
+    const mediaPromises = groupData.originalMessages.map(async (msg, index) => {
+      if (!msg.media) {
+        logger.warn(`⚠️ Messaggio ${msg.id} senza media`);
+        return null;
       }
       
-      // Invia il primo messaggio con il testo
-      const firstMsg = groupData.originalMessages[0];
-      if (firstMsg && firstMsg.media) {
-        const mediaBuffer = await userClient.downloadMedia(firstMsg.media);
+      try {
+        // Scarica il media
+        const mediaBuffer = await userClient.downloadMedia(msg.media);
         if (!mediaBuffer || mediaBuffer.length === 0) {
-          throw new Error('Download del primo media fallito');
+          logger.warn(`⚠️ Download media fallito per messaggio ${msg.id}`);
+          return null;
         }
         
-        const filePath = await this.saveTempMediaFile(mediaBuffer, firstMsg.media.className);
+        // Salva il media in un file temporaneo
+        const filePath = await this.saveTempMediaFile(mediaBuffer, msg.media.className);
+        logger.info(`⚠️ Media ${index+1}/${groupData.originalMessages.length} salvato: ${filePath}`);
         
-        // Invia il primo messaggio con tutto il testo
-        const sentMessage = await this.sendPhoto(filePath, caption, channelConfig.destinationTopic);
-        await this.cleanupTempFile(filePath);
+        // Determina il tipo di media
+        let type = 'photo';
+        if (msg.media.className === 'MessageMediaVideo') {
+          type = 'video';
+        } else if (msg.media.className === 'MessageMediaDocument') {
+          type = 'document';
+        }
         
-        logger.info(`Prima immagine del gruppo inviata con successo`);
+        return {
+          path: filePath,
+          type: type,
+          isFirst: index === 0 // Primo messaggio del gruppo
+        };
+      } catch (error) {
+        logger.error(`⚠️ Errore download media ${msg.id}: ${error.message}`);
+        return null;
+      }
+    });
+    
+    // Attendi il completamento di tutti i download
+    const mediaResults = await Promise.all(mediaPromises);
+    
+    // Filtra i media nulli (falliti)
+    const mediaFiles = mediaResults.filter(m => m !== null);
+    
+    logger.info(`⚠️ Media scaricati con successo: ${mediaFiles.length}/${groupData.originalMessages.length}`);
+    
+    // Se non ci sono media validi, esci
+    if (mediaFiles.length === 0) {
+      logger.warn('⚠️ Nessun media valido da inviare');
+      return false;
+    }
+    
+    // CASO SINGOLO MEDIA: invia come messaggio normale
+    if (mediaFiles.length === 1) {
+      logger.info('⚠️ Invio come messaggio singolo');
+      const media = mediaFiles[0];
+      
+      if (media.type === 'photo') {
+        await this.sendPhoto(media.path, caption, channelConfig.destinationTopic);
+      } else if (media.type === 'video') {
+        await this.sendVideo(media.path, caption, channelConfig.destinationTopic);
+      } else {
+        await this.sendDocument(media.path, caption, channelConfig.destinationTopic);
+      }
+      
+      // Pulisci il file
+      await this.cleanupTempFile(media.path);
+      
+      logger.info('⚠️ Messaggio singolo inviato con successo');
+      return true;
+    }
+    
+    // CASO ALBUM: usa sendMediaGroup per inviare come album
+    if (isRealAlbum) {
+      logger.info(`⚠️ Invio come album unificato (${mediaFiles.length} media)`);
+      
+      // Se ci sono più di 10 media, limitiamo a 10 (limite API Telegram)
+      if (mediaFiles.length > 10) {
+        logger.warn(`⚠️ Troppi media (${mediaFiles.length}), limitato a 10`);
+        mediaFiles.splice(10); // Mantieni solo i primi 10
+      }
+      
+      // Prepara l'array di input per sendMediaGroup
+      const mediaInputs = mediaFiles.map((media, index) => {
+        const mediaItem = {
+          type: media.type,
+          media: `attach://${path.basename(media.path)}`
+        };
         
-        // Invia le immagini rimanenti come risposta
-        if (groupData.originalMessages.length > 1) {
-          for (let i = 1; i < groupData.originalMessages.length; i++) {
-            const msg = groupData.originalMessages[i];
-            if (msg && msg.media) {
-              try {
-                const mediaBuffer = await userClient.downloadMedia(msg.media);
-                if (!mediaBuffer || mediaBuffer.length === 0) continue;
-                
-                const filePath = await this.saveTempMediaFile(mediaBuffer, msg.media.className);
-                
-                // Invia senza caption (solo come immagine)
-                const formData = new FormData();
-                formData.append('chat_id', this.destinationChannelId);
-                formData.append('message_thread_id', channelConfig.destinationTopic);
-                formData.append('photo', fs.createReadStream(filePath));
-                formData.append('reply_to_message_id', sentMessage.result.message_id);
-                
-                const url = `https://api.telegram.org/bot${this.botToken}/sendPhoto`;
-                await axios.post(url, formData, {
-                  headers: formData.getHeaders()
-                });
-                
-                await this.cleanupTempFile(filePath);
-                logger.info(`Immagine ${i+1} del gruppo inviata come risposta`);
-              } catch (err) {
-                logger.error(`Errore invio immagine ${i+1}: ${err.message}`);
-                // Continua comunque con il prossimo
-              }
+        // Aggiungi caption solo al primo elemento
+        if (index === 0) {
+          mediaItem.caption = caption;
+          mediaItem.parse_mode = 'HTML';
+        }
+        
+        return mediaItem;
+      });
+      
+      logger.info(`⚠️ Invio album con ${mediaInputs.length} media`);
+      
+      try {
+        // Prepara la form per l'invio
+        const formData = new FormData();
+        formData.append('chat_id', this.destinationChannelId);
+        if (channelConfig.destinationTopic) {
+          formData.append('message_thread_id', channelConfig.destinationTopic);
+        }
+        formData.append('media', JSON.stringify(mediaInputs));
+        
+        // Aggiungi tutti i file alla form
+        for (const media of mediaFiles) {
+          formData.append(path.basename(media.path), fs.createReadStream(media.path));
+        }
+        
+        // Invia l'album
+        const url = `https://api.telegram.org/bot${this.botToken}/sendMediaGroup`;
+        const response = await axios.post(url, formData, {
+          headers: formData.getHeaders(),
+          maxBodyLength: Infinity,
+          maxContentLength: Infinity
+        });
+        
+        logger.info(`⚠️ Album inviato con successo: ${response.status}`);
+        
+        // Pulisci i file
+        for (const media of mediaFiles) {
+          await this.cleanupTempFile(media.path);
+        }
+        
+        return true;
+      } catch (error) {
+        logger.error(`⚠️ Errore invio album: ${error.message}`);
+        
+        // FALLBACK: invio sequenziale come risposte
+        logger.info('⚠️ Fallback: invio sequenziale come risposte');
+        
+        let firstMessageId = null;
+        
+        // Invia il primo media con caption
+        const firstMedia = mediaFiles[0];
+        try {
+          let response;
+          if (firstMedia.type === 'photo') {
+            response = await this.sendPhoto(firstMedia.path, caption, channelConfig.destinationTopic);
+          } else if (firstMedia.type === 'video') {
+            response = await this.sendVideo(firstMedia.path, caption, channelConfig.destinationTopic);
+          } else {
+            response = await this.sendDocument(firstMedia.path, caption, channelConfig.destinationTopic);
+          }
+          
+          await this.cleanupTempFile(firstMedia.path);
+          
+          // Ottieni l'ID del messaggio inviato
+          if (response && response.result && response.result.message_id) {
+            firstMessageId = response.result.message_id;
+            logger.info(`⚠️ Primo media inviato con ID: ${firstMessageId}`);
+          }
+        } catch (err) {
+          logger.error(`⚠️ Errore invio primo media: ${err.message}`);
+          // Pulisci i file rimanenti e esci
+          for (const media of mediaFiles) {
+            await this.cleanupTempFile(media.path);
+          }
+          return false;
+        }
+        
+        // Se non abbiamo l'ID del primo messaggio, pulisci e esci
+        if (!firstMessageId) {
+          logger.error('⚠️ Impossibile ottenere ID primo messaggio');
+          // Pulisci i file rimanenti
+          for (let i = 1; i < mediaFiles.length; i++) {
+            await this.cleanupTempFile(mediaFiles[i].path);
+          }
+          return false;
+        }
+        
+        // Invia i media rimanenti come risposte al primo
+        for (let i = 1; i < mediaFiles.length; i++) {
+          const media = mediaFiles[i];
+          
+          try {
+            const formData = new FormData();
+            formData.append('chat_id', this.destinationChannelId);
+            if (channelConfig.destinationTopic) {
+              formData.append('message_thread_id', channelConfig.destinationTopic);
             }
+            formData.append('reply_to_message_id', firstMessageId);
+            
+            let url;
+            if (media.type === 'photo') {
+              url = `https://api.telegram.org/bot${this.botToken}/sendPhoto`;
+              formData.append('photo', fs.createReadStream(media.path));
+            } else if (media.type === 'video') {
+              url = `https://api.telegram.org/bot${this.botToken}/sendVideo`;
+              formData.append('video', fs.createReadStream(media.path));
+            } else {
+              url = `https://api.telegram.org/bot${this.botToken}/sendDocument`;
+              formData.append('document', fs.createReadStream(media.path));
+            }
+            
+            await axios.post(url, formData, {
+              headers: formData.getHeaders()
+            });
+            
+            logger.info(`⚠️ Media ${i+1} inviato come risposta`);
+          } catch (err) {
+            logger.error(`⚠️ Errore invio media ${i+1}: ${err.message}`);
+          } finally {
+            await this.cleanupTempFile(media.path);
           }
         }
         
         return true;
-      } else {
-        // Non ci sono media, invia solo testo
-        await this.sendTextMessage(caption, channelConfig.destinationTopic);
-        logger.info(`Messaggio di gruppo (solo testo) inviato con successo`);
-        return true;
       }
+    }
+    
+    return true;
+  } catch (error) {
+    logger.error(`⚠️ ERRORE CRITICO pubblicazione gruppo: ${error.message}`);
+    return false;
+  }
+}
+
+  async sendReplyMedia(message, replyToMessageId, channelConfig) {
+    try {
+      const userClient = this.telegramService.getUserClient();
+      
+      // Scarica il media
+      const mediaBuffer = await userClient.downloadMedia(message.media);
+      if (!mediaBuffer || mediaBuffer.length === 0) {
+        logger.warn(`Download media fallito per messaggio ${message.id}`);
+        return;
+      }
+      
+      // Salva il media in un file temporaneo
+      const filePath = await this.saveTempMediaFile(mediaBuffer, message.media.className);
+      
+      // Prepara la form
+      const formData = new FormData();
+      formData.append('chat_id', this.destinationChannelId);
+      if (channelConfig.destinationTopic) {
+        formData.append('message_thread_id', channelConfig.destinationTopic);
+      }
+      formData.append('reply_to_message_id', replyToMessageId);
+      
+      // Determina il tipo di media e invia
+      let url;
+      if (message.media.className === 'MessageMediaPhoto') {
+        url = `https://api.telegram.org/bot${this.botToken}/sendPhoto`;
+        formData.append('photo', fs.createReadStream(filePath));
+      } else if (message.media.className === 'MessageMediaVideo') {
+        url = `https://api.telegram.org/bot${this.botToken}/sendVideo`;
+        formData.append('video', fs.createReadStream(filePath));
+      } else {
+        url = `https://api.telegram.org/bot${this.botToken}/sendDocument`;
+        formData.append('document', fs.createReadStream(filePath));
+      }
+      
+      // Invia il media
+      await axios.post(url, formData, {
+        headers: formData.getHeaders()
+      });
+      
+      logger.info(`Media ${message.id} inviato come risposta a ${replyToMessageId}`);
+      
+      // Pulisci il file
+      await this.cleanupTempFile(filePath);
     } catch (error) {
-      logger.error(`Errore nella pubblicazione del gruppo di media: ${error.message}`);
-      return false;
+      logger.error(`Errore invio media ${message.id} come risposta: ${error.message}`);
     }
   }
+  
 }
 
 module.exports = MediaProcessor;
