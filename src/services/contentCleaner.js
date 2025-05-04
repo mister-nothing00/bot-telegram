@@ -164,10 +164,10 @@ class ContentCleaner {
   /**
    * Applica markup al prezzo
    * @param {Object} price - Informazioni sul prezzo
-   * @param {Number} markupPercentage - Percentuale di markup (25%)
+   * @param {Number} markupPercentage - Percentuale di markup (50%)
    * @returns {Object} Prezzo con markup applicato
    */
-  applyMarkup(price, markupPercentage = 25) {  // Default a 25%
+  applyMarkup(price, markupPercentage = 50) {  // Default a 50%
     if (!price) return null;
     
     const markup = price.original * (markupPercentage / 100);
