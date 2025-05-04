@@ -7,9 +7,11 @@
  */
 const express = require("express");
 const { NewMessage } = require("telegram/events");
+const { ChatAction } = require("telegram/events");
 const config = require("./config");
 const connectDB = require("./config/database");
 const telegramService = require("./services/telegram");
+const welcomeService = require("./services/welcomeService");
 const MediaProcessor = require("./services/mediaProcessor");
 const channelController = require("./controllers/channelController");
 const logger = require("./utils/logger");
@@ -74,7 +76,7 @@ async function main() {
       if (groupsRemoved > 0) {
         logger.warn(`⚠️ Rimossi ${groupsRemoved} gruppi scaduti dopo 5 minuti`);
       }
-    }, 60000); // Controllo ogni minuto
+    }, 120000); // Ogni 2 minuti
     
     // Handler per i nuovi messaggi dai canali monitorati
     userClient.addEventHandler(async (event) => {
@@ -141,6 +143,35 @@ async function main() {
       }
     }, new NewMessage({}));
     
+
+    userClient.addEventHandler(async (event) => {
+      try {
+        // Verifica se è un evento che indica che un utente si è unito
+        if (event.className === 'UpdateChatParticipant' && 
+            event.action && 
+            event.action.className === 'ChatParticipantAdd') {
+          
+          // Estrai l'ID del canale
+          const channelId = `-100${event.chatId.channelId}`;
+          
+          // Verifica che sia il nostro canale di destinazione
+          if (channelId === config.telegram.destinationChannelId) {
+            logger.info(`Nuovo utente rilevato nel canale ${channelId}`);
+            
+            // Ottieni informazioni sull'utente
+            const userId = event.action.userId;
+            const user = await userClient.getEntity(userId);
+            
+            // Gestisci il nuovo membro
+            await welcomeService.handleNewMember(user);
+          }
+        }
+      } catch (error) {
+        logger.error(`Errore nell'handler di nuovi membri: ${error.message}`, error);
+      }
+    }, new NewMessage({})); // Usa lo stesso evento NewMessage, filtreremo manualmente
+    
+
     // Configura le routes dell'API
     setupApiRoutes(app);
     
@@ -186,15 +217,7 @@ async function verifyBotPermissions() {
 /**
  * Gestisce i messaggi raggruppati (album di foto)
  */
-/**
- * Gestisce i messaggi raggruppati (album di foto) con maggior debug e attesa
- */
-/**
- * Gestisce i messaggi raggruppati (album di foto) - VERSIONE CORRETTA
- */
-/**
- * Gestisce i messaggi raggruppati (album di foto) - SOLUZIONE ALTERNATIVA
- */
+
 function handleGroupedMessage(mediaGroups, processedContent, channelConfig, message, mediaProcessor, channelController) {
   // Converti l'ID del gruppo in una stringa
   const groupIdStr = String(processedContent.groupedId);
